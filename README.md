@@ -81,6 +81,7 @@ Creating a brand new table is never blocked — an empty table has nothing to lo
 ## Notes
 
 - Designed for PostgreSQL, where these locks actually hurt. Most checks are driver-aware and stay silent on MySQL/SQLite.
+- Concurrent index builds: `->online()` only exists in Laravel 12+. On Laravel 10/11 the schema builder cannot create indexes concurrently at all — the package detects this and points you at a raw `DB::statement('CREATE INDEX CONCURRENTLY ...')` migration (with `$withinTransaction = false`) instead of letting an `->online()` call that the grammar would silently ignore slip through.
 - Migrations on a non-default connection via `Schema::connection('tenant')` need the resolver installed by hand:
   `Schema::connection('tenant')->blueprintResolver(StrongMigrationsServiceProvider::blueprintResolver());`
 
