@@ -44,6 +44,27 @@ class InspectorTest extends TestCase
         $this->assertSame([], $findings);
     }
 
+    public function test_it_flags_an_online_index_when_the_framework_grammar_ignores_it(): void
+    {
+        $commands = [new Fluent(['name' => 'index', 'columns' => ['email'], 'index' => 'users_email_index', 'online' => true])];
+
+        $findings = $this->inspector->inspect([], $commands, 'pgsql', $this->modes(), ['online_index_supported' => false]);
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('add_index', $findings[0]->check);
+        $this->assertStringContainsString('CREATE INDEX CONCURRENTLY', $findings[0]->suggestion);
+    }
+
+    public function test_it_suggests_a_raw_statement_when_online_is_unsupported(): void
+    {
+        $commands = [new Fluent(['name' => 'index', 'columns' => ['email'], 'index' => 'users_email_index'])];
+
+        $findings = $this->inspector->inspect([], $commands, 'pgsql', $this->modes(), ['online_index_supported' => false]);
+
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('CREATE INDEX CONCURRENTLY', $findings[0]->suggestion);
+    }
+
     public function test_it_ignores_indexes_on_mysql(): void
     {
         $commands = [new Fluent(['name' => 'index', 'columns' => ['email'], 'index' => 'users_email_index'])];

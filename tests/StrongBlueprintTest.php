@@ -45,7 +45,11 @@ class StrongBlueprintTest extends TestCase
             $blueprint->toSql();
             $this->fail('Expected UnsafeMigrationException');
         } catch (UnsafeMigrationException $e) {
-            $this->assertStringContainsString('->online()', $e->getMessage());
+            $expected = $this->frameworkCompilesOnlineIndexes()
+                ? '->online()'
+                : 'CREATE INDEX CONCURRENTLY';
+
+            $this->assertStringContainsString($expected, $e->getMessage());
         }
     }
 
@@ -53,10 +57,28 @@ class StrongBlueprintTest extends TestCase
     {
         $blueprint = $this->blueprint(fn ($t) => $t->index('email')->online());
 
+        if (! $this->frameworkCompilesOnlineIndexes()) {
+            // Laravel 10/11 grammars ignore online() entirely, so the package
+            // must block this instead of letting a locking index through.
+            $this->expectException(UnsafeMigrationException::class);
+            $blueprint->toSql();
+
+            return;
+        }
+
         $statements = $blueprint->toSql();
 
         $this->assertNotEmpty($statements);
         $this->assertStringContainsString('concurrently', $statements[0]);
+    }
+
+    private function frameworkCompilesOnlineIndexes(): bool
+    {
+        if (! class_exists(\Illuminate\Foundation\Application::class)) {
+            return true;
+        }
+
+        return version_compare(\Illuminate\Foundation\Application::VERSION, '12.0.0', '>=');
     }
 
     public function test_it_does_not_inspect_when_a_check_is_off(): void

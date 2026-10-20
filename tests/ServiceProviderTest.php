@@ -22,6 +22,13 @@ class ServiceProviderTest extends TestCase
         return [StrongMigrationsServiceProvider::class];
     }
 
+    protected function getEnvironmentSetUp($app)
+    {
+        // Older testbench versions default to mysql; pin the in-memory
+        // sqlite "testing" connection so the suite is deterministic.
+        $app['config']->set('database.default', 'testing');
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
