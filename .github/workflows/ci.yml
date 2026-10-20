@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.2'
+            laravel: '10.*'
+            testbench: '8.*'
+            phpunit: '10.*'
+          - php: '8.3'
+            laravel: '11.*'
+            testbench: '9.*'
+            phpunit: '11.*'
+          - php: '8.4'
+            laravel: '12.*'
+            testbench: '10.*'
+            phpunit: '11.*'
+
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, sqlite3
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer update --no-interaction --prefer-dist --no-progress -W \
+            "illuminate/database:${{ matrix.laravel }}" \
+            "illuminate/support:${{ matrix.laravel }}" \
+            "illuminate/console:${{ matrix.laravel }}" \
+            "orchestra/testbench:${{ matrix.testbench }}" \
+            "phpunit/phpunit:${{ matrix.phpunit }}"
+
+      - name: Run tests
+        run: vendor/bin/phpunit
