@@ -38,12 +38,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer update --no-interaction --prefer-dist --no-progress -W \
+          composer config --no-interaction policy.advisories.block false
+          composer require --no-update --no-interaction \
             "illuminate/database:${{ matrix.laravel }}" \
             "illuminate/support:${{ matrix.laravel }}" \
-            "illuminate/console:${{ matrix.laravel }}" \
+            "illuminate/console:${{ matrix.laravel }}"
+          composer require --no-update --no-interaction --dev \
             "orchestra/testbench:${{ matrix.testbench }}" \
             "phpunit/phpunit:${{ matrix.phpunit }}"
+          composer update --no-interaction --prefer-dist --no-progress
 
       - name: Run tests
         run: vendor/bin/phpunit
