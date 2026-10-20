@@ -61,7 +61,10 @@ class StrongMigrationsServiceProvider extends ServiceProvider
      */
     public static function blueprintResolver(): Closure
     {
-        return fn ($connection, $table, $callback = null) => new StrongBlueprint($connection, $table, $callback);
+        // The arguments differ per Laravel version — (connection, table,
+        // callback) on 12+, (table, callback, prefix) on 10/11 — and
+        // StrongBlueprint's constructor normalises both shapes.
+        return fn (...$args) => new StrongBlueprint(...$args);
     }
 
     /**

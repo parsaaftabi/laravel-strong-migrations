@@ -34,9 +34,11 @@ class Inspector
     /**
      * @param  ColumnDefinition[]  $columns
      * @param  Fluent[]  $commands
+     * @param  array{online_index_supported?: bool}  $context  Capabilities of the
+     *                                             running framework, probed by the blueprint.
      * @return Finding[]
      */
-    public function inspect(array $columns, array $commands, string $driver, array $modes): array
+    public function inspect(array $columns, array $commands, string $driver, array $modes, array $context = []): array
     {
         $findings = [];
 
@@ -45,7 +47,7 @@ class Inspector
         }
 
         foreach ($commands as $command) {
-            $findings = array_merge($findings, $this->inspectCommand($command, $driver, $modes));
+            $findings = array_merge($findings, $this->inspectCommand($command, $driver, $modes, $context));
         }
 
         return $findings;
@@ -64,7 +66,7 @@ class Inspector
             $type = $column->unique ? 'unique' : 'index';
             $this->add($findings, $modes, 'add_index',
                 "Adding the {$type} index on \"{$column->name}\" takes an ACCESS EXCLUSIVE lock on PostgreSQL and blocks writes until the build finishes.",
-                "Declare the index on the blueprint instead so it can be built CONCURRENTLY: \$table->{$type}('{$column->name}')->online()");
+                "Declare the index on the blueprint instead of on the column, so it can be built CONCURRENTLY: \$table->{$type}('{$column->name}')");
         }
 
         if ($column->change) {
@@ -95,18 +97,34 @@ class Inspector
     /**
      * @return Finding[]
      */
-    private function inspectCommand(Fluent $command, string $driver, array $modes): array
+    private function inspectCommand(Fluent $command, string $driver, array $modes, array $context = []): array
     {
         $findings = [];
 
         switch ($command->name) {
             case 'index':
             case 'unique':
-                if ($driver === 'pgsql' && empty($command->online)) {
+                if ($driver === 'pgsql') {
                     $columns = implode(', ', (array) $command->columns);
-                    $this->add($findings, $modes, 'add_index',
-                        "Adding the index \"{$command->index}\" on ({$columns}) takes an ACCESS EXCLUSIVE lock on PostgreSQL and blocks writes until the build finishes.",
-                        "Build it CONCURRENTLY so writes keep flowing: \$table->{$command->name}('{$columns}')->online()");
+                    $supported = $context['online_index_supported'] ?? true;
+
+                    if (! empty($command->online) && $supported) {
+                        break;
+                    }
+
+                    if (! empty($command->online)) {
+                        $this->add($findings, $modes, 'add_index',
+                            "The index \"{$command->index}\" is marked ->online(), but this Laravel version's PostgreSQL grammar ignores online() — the index will still be built under a full write lock.",
+                            'Create it with a raw statement instead: DB::statement(\'CREATE INDEX CONCURRENTLY ...\'), in a migration with $withinTransaction = false.');
+                    } elseif ($supported) {
+                        $this->add($findings, $modes, 'add_index',
+                            "Adding the index \"{$command->index}\" on ({$columns}) takes an ACCESS EXCLUSIVE lock on PostgreSQL and blocks writes until the build finishes.",
+                            "Build it CONCURRENTLY so writes keep flowing: \$table->{$command->name}('{$columns}')->online()");
+                    } else {
+                        $this->add($findings, $modes, 'add_index',
+                            "Adding the index \"{$command->index}\" on ({$columns}) takes an ACCESS EXCLUSIVE lock on PostgreSQL and blocks writes until the build finishes — and this Laravel version's schema builder cannot create indexes concurrently.",
+                            'Create it with a raw statement instead: DB::statement(\'CREATE INDEX CONCURRENTLY ...\'), in a migration with $withinTransaction = false.');
+                    }
                 }
                 break;
 
